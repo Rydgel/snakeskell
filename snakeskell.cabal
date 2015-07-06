@@ -17,6 +17,7 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 executable snakeskell
+  ghc-options:         -Wall
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:

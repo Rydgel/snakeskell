@@ -34,20 +34,24 @@ moveSnake (State s @ (x:_) c UpD f) = State (x <> Point2D 0 (-1) : init s) c UpD
 moveSnake (State s @ (x:_) c DownD f) = State (x <> Point2D 0 1 : init s) c DownD f
 moveSnake (State s @ (x:_) c LeftD f) = State (x <> Point2D (-1) 0 : init s) c LeftD f
 moveSnake (State s @ (x:_) c RightD f) = State (x <> Point2D 1 0 : init s) c RightD f
+moveSnake st @ (State [] _ _ _) = st
 
 handleCollision :: (Int,Int) -> State -> State
-handleCollision (sh,sw) s @ (State (x:xs) c d _)
+handleCollision (sh,sw) st @ (State (x:xs) c d _)
   | posX <= 0 || posX >= sw = State (x:xs) c d True
   | posY <= 0 || posY >= sh = State (x:xs) c d True
   -- todo collision snake itself, basically if the head collides one elem of the tail
-  | otherwise = s
+  | otherwise = st
     where posX = px x
           posY = py x
+handleCollision (_, _) st @ (State [] _ _ _) = st
+
 
 eatCandy :: Point2D -> State -> State
 eatCandy newCandy st @ (State sn @ (x:_) c d f)
   | x == c = State (sn ++ replicate 2 (last sn)) newCandy d f
   | otherwise = st
+eatCandy _ st @ (State [] _ _ _) = st
 
 generateCandy :: (Int,Int) -> IO Point2D
 generateCandy (sh, sw) = do
@@ -78,7 +82,7 @@ drawScene (State sn c _ _) window scene = do
 
 tick :: State -> Curses.Window -> IO ()
 tick s w = do
-  Curses.flushinp -- flush input
+  _ <- Curses.flushinp -- flush input
   (sh,sw) <- Curses.scrSize
   let scene = (sh-2,sw-1)
   drawScene s w scene
@@ -97,7 +101,7 @@ main = do
   window <- Curses.initScr
   (sh,sw) <- Curses.scrSize
   let scene = (sh-2,sw-1)
-  Curses.cursSet Curses.CursorInvisible
+  _ <- Curses.cursSet Curses.CursorInvisible
   Curses.timeout 0
   Curses.cBreak True
   Curses.keypad Curses.stdScr True

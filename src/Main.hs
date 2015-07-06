@@ -84,7 +84,7 @@ tick :: State -> Curses.Window -> IO ()
 tick s w = do
   _ <- Curses.flushinp -- flush input
   (sh,sw) <- Curses.scrSize
-  let scene = (sh-1,sw-1)
+  let scene = (sh-2,sw-1)
   drawScene s w scene
   threadDelay 80000
   newCandy <- generateCandy scene
@@ -100,7 +100,7 @@ main :: IO ()
 main = do
   window <- Curses.initScr
   (sh,sw) <- Curses.scrSize
-  let scene = (sh-1,sw-1)
+  let scene = (sh-2,sw-1)
   _ <- Curses.cursSet Curses.CursorInvisible
   Curses.timeout 0
   Curses.cBreak True

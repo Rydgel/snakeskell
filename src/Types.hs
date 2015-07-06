@@ -28,3 +28,5 @@ data State = State { snake     :: [Point2D]
                    , direction :: Direction
                    , finished  :: Bool
                    } deriving (Show)
+
+type Scene = (Int,Int)

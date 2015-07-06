@@ -11,36 +11,33 @@ import qualified UI.HSCurses.Curses as Curses
 import           Types
 
 
-initialState :: Point2D -> (Int,Int) -> State
+initialState :: Point2D -> Scene -> State
 initialState c (sh,sw) = State (replicate 5 $ Point2D (sw `div` 2) (sh `div` 2)) c RightD False
 
 finishGame :: State -> State
 finishGame (State sn c d _) = State sn c d True
 
 moveSnake :: State -> State
-moveSnake (State s @ (x:_) c UpD f) = State (x <> Point2D 0 (-1) : init s) c UpD f
-moveSnake (State s @ (x:_) c DownD f) = State (x <> Point2D 0 1 : init s) c DownD f
-moveSnake (State s @ (x:_) c LeftD f) = State (x <> Point2D (-1) 0 : init s) c LeftD f
-moveSnake (State s @ (x:_) c RightD f) = State (x <> Point2D 1 0 : init s) c RightD f
-moveSnake st @ (State [] _ _ _) = st
+moveSnake (State s c UpD f) = State (head s <> Point2D 0 (-1) : init s) c UpD f
+moveSnake (State s c DownD f) = State (head s <> Point2D 0 1 : init s) c DownD f
+moveSnake (State s c LeftD f) = State (head s <> Point2D (-1) 0 : init s) c LeftD f
+moveSnake (State s c RightD f) = State (head s <> Point2D 1 0 : init s) c RightD f
 
-handleCollision :: (Int,Int) -> State -> State
-handleCollision (sh,sw) st @ (State (x:_) _ _ _)
+handleCollision :: Scene -> State -> State
+handleCollision (sh,sw) st @ (State xs _ _ _)
   | posX <= 0 || posX >= sw = finishGame st
   | posY <= 0 || posY >= sh = finishGame st
   -- todo collision snake itself, basically if the head collides one elem of the tail
   | otherwise = st
-    where posX = px x
-          posY = py x
-handleCollision (_, _) st @ (State [] _ _ _) = st
+    where posX = px $ head xs
+          posY = py $ head xs
 
 eatCandy :: Point2D -> State -> State
-eatCandy newCandy st @ (State sn @ (x:_) c d f)
-  | x == c = State (sn ++ replicate 2 (last sn)) newCandy d f
+eatCandy newCandy st @ (State sn c d f)
+  | head sn == c = State (sn ++ replicate 2 (last sn)) newCandy d f
   | otherwise = st
-eatCandy _ st @ (State [] _ _ _) = st
 
-generateCandy :: (Int,Int) -> IO Point2D
+generateCandy :: Scene -> IO Point2D
 generateCandy (sh, sw) = do
   randX <- randomRIO (1, sw-1)
   randY <- randomRIO (1, sh-1)
@@ -53,13 +50,13 @@ inputDirection Curses.KeyLeft (State sn c d f) = State sn c (d <> LeftD) f
 inputDirection Curses.KeyRight (State sn c d f) = State sn c (d <> RightD) f
 inputDirection _ s = s
 
-drawBorders :: Curses.Window -> (Int,Int) -> IO ()
+drawBorders :: Curses.Window -> Scene -> IO ()
 drawBorders window (sh,sw) =
   mapM_ (\(x,y) -> Curses.mvWAddStr window y x "▨") borderPoints where
     cond x y = x == 0 || x == sw || y == 0 || y == sh
     borderPoints = [(x, y) | x <- [0..sw], y <- [0..sh], cond x y]
 
-drawScene :: State -> Curses.Window -> (Int,Int) -> IO ()
+drawScene :: State -> Curses.Window -> Scene -> IO ()
 drawScene (State sn c _ _) window scene = do
   Curses.wclear window
   drawBorders window scene -- draw borders
@@ -67,7 +64,7 @@ drawScene (State sn c _ _) window scene = do
   mapM_ (\s -> Curses.mvWAddStr window (py s) (px s) "#") sn -- draw snake
   Curses.wRefresh window
 
-getKeyEvent :: State -> (Int,Int) -> IO State
+getKeyEvent :: State -> Scene -> IO State
 getKeyEvent s scene = do
   newCandy <- generateCandy scene
   Curses.getch >>= \ch -> case Curses.decodeKey ch of
@@ -86,7 +83,7 @@ tick s w = do
   newState <- getKeyEvent s scene
   unless (finished newState) $ tick newState w
 
-initCurses :: IO (Curses.Window, (Int,Int))
+initCurses :: IO (Curses.Window, Scene)
 initCurses = do
   window <- Curses.initScr
   _ <- Curses.cursSet Curses.CursorInvisible

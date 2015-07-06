@@ -27,7 +27,7 @@ handleCollision :: Scene -> State -> State
 handleCollision (sh,sw) st @ (State xs _ _ _)
   | posX <= 0 || posX >= sw = finishGame st
   | posY <= 0 || posY >= sh = finishGame st
-  -- todo collision snake itself, basically if the head collides one elem of the tail
+  | head xs `elem` tail xs = finishGame st
   | otherwise = st
     where posX = px $ head xs
           posY = py $ head xs

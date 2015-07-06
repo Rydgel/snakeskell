@@ -28,9 +28,9 @@ handleCollision (sh,sw) st @ (State xs _ _ _)
   | posX <= 0 || posX >= sw = finishGame st
   | posY <= 0 || posY >= sh = finishGame st
   | head xs `elem` tail xs = finishGame st
-  | otherwise = st
-    where posX = px $ head xs
-          posY = py $ head xs
+  | otherwise = st where
+    posX = px $ head xs
+    posY = py $ head xs
 
 eatCandy :: Point2D -> State -> State
 eatCandy newCandy st @ (State sn c d f)

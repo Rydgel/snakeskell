@@ -1,5 +1,6 @@
 ## todo
 
-1. Try State Monad and/or FRP (netwire?)
-2. Score
-3. SDL2
+1. Try State Monad - Done
+2. Try FRP (netwire?)
+3. Score
+4. SDL2

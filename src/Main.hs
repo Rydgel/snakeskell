@@ -1,38 +1,41 @@
 module Main where
 
+import           Control.Lens
 import           Control.Concurrent
-import           Control.Monad      (unless)
-import           Data.Semigroup
 import           System.Random
+import           Data.Monoid ((<>))
 import qualified UI.HSCurses.Curses as Curses
 import           Types
+import           Control.Monad.State.Strict
 
 
-initialState :: Point2D -> Scene -> State
-initialState c (sh,sw) = State (replicate 5 $ Point2D (sw `div` 2) (sh `div` 2)) c RightD False
+initialState :: Point2D -> Scene -> Game
+initialState c (sh,sw) = Game (replicate 5 $ Point2D (sw `div` 2) (sh `div` 2)) c RightD False
 
-finishGame :: State -> State
-finishGame (State sn c d _) = State sn c d True
+finishGame :: State Game ()
+finishGame = finished .= True
 
-moveSnake :: State -> State
-moveSnake (State s c UpD f) = State (head s <> Point2D 0 (-1) : init s) c UpD f
-moveSnake (State s c DownD f) = State (head s <> Point2D 0 1 : init s) c DownD f
-moveSnake (State s c LeftD f) = State (head s <> Point2D (-1) 0 : init s) c LeftD f
-moveSnake (State s c RightD f) = State (head s <> Point2D 1 0 : init s) c RightD f
+moveSnake :: State Game ()
+moveSnake = modify' (\st -> st & snake .~ case st ^. direction of
+  UpD    -> (st ^. snake ^. _head) <> Point2D 0 (-1) : st ^. snake ^. _init
+  DownD  -> (st ^. snake ^. _head) <> Point2D 0 1 : st ^. snake ^. _init
+  LeftD  -> (st ^. snake ^. _head) <> Point2D (-1) 0 : st ^. snake ^. _init
+  RightD -> (st ^. snake ^. _head) <> Point2D 1 0 : st ^. snake ^. _init)
 
-handleCollision :: Scene -> State -> State
-handleCollision (sh,sw) st @ (State xs _ _ _)
-  | posX <= 0 || posX >= sw = finishGame st
-  | posY <= 0 || posY >= sh = finishGame st
-  | head xs `elem` tail xs = finishGame st
-  | otherwise = st where
-    posX = px $ head xs
-    posY = py $ head xs
+handleCollision :: Scene -> State Game ()
+handleCollision (sh,sw) = do
+  st <- get
+  let xs = st ^. snake
+  let posX = xs ^. _head ^. px
+  let posY = xs ^. _head ^. py
+  when (posX <= 0 || posX >= sw || posY <= 0 || posY >= sh || head xs `elem` tail xs) finishGame
 
-eatCandy :: Point2D -> State -> State
-eatCandy newCandy st @ (State sn c d f)
-  | head sn == c = State (sn ++ replicate 2 (last sn)) newCandy d f
-  | otherwise = st
+eatCandy :: Point2D -> State Game ()
+eatCandy newCandy = modify' (\st -> do
+  let sn = st ^. snake
+  if head sn == st ^. candy -- eating a candy
+  then Game (sn ++ replicate 2 (last sn)) newCandy (st ^. direction) (st ^. finished)
+  else st)
 
 generateCandy :: Scene -> IO Point2D
 generateCandy (sh, sw) = do
@@ -40,12 +43,13 @@ generateCandy (sh, sw) = do
   randY <- randomRIO (1, sh-1)
   return (Point2D randX randY)
 
-inputDirection :: Curses.Key -> State -> State
-inputDirection Curses.KeyUp (State sn c d f) = State sn c (d <> UpD) f
-inputDirection Curses.KeyDown (State sn c d f) = State sn c (d <> DownD) f
-inputDirection Curses.KeyLeft (State sn c d f) = State sn c (d <> LeftD) f
-inputDirection Curses.KeyRight (State sn c d f) = State sn c (d <> RightD) f
-inputDirection _ s = s
+inputDirection :: Curses.Key -> State Game ()
+inputDirection k = case k of
+  Curses.KeyUp    -> direction <>= UpD
+  Curses.KeyDown  -> direction <>= DownD
+  Curses.KeyLeft  -> direction <>= LeftD
+  Curses.KeyRight -> direction <>= RightD
+  _               -> modify' id
 
 drawBorders :: Curses.Window -> Scene -> IO ()
 drawBorders window (sh,sw) =
@@ -53,32 +57,35 @@ drawBorders window (sh,sw) =
     cond x y = x == 0 || x == sw || y == 0 || y == sh
     borderPoints = [(x, y) | x <- [0..sw], y <- [0..sh], cond x y]
 
-drawScene :: State -> Curses.Window -> Scene -> IO ()
-drawScene (State sn c _ _) window scene = do
+drawScene :: Game -> Curses.Window -> Scene -> IO ()
+drawScene (Game sn c _ _) window scene = do
   Curses.wclear window
   drawBorders window scene -- draw borders
-  Curses.mvWAddStr window (py c) (px c) "@" -- draw candy
-  mapM_ (\s -> Curses.mvWAddStr window (py s) (px s) "#") sn -- draw snake
+  Curses.mvWAddStr window (c ^. py) (c ^. px) "@" -- draw candy
+  mapM_ (\s -> Curses.mvWAddStr window (s ^. py) (s ^. px) "#") sn -- draw snake
   Curses.wRefresh window
 
-getKeyEvent :: State -> Scene -> IO State
-getKeyEvent s scene = do
-  newCandy <- generateCandy scene
-  Curses.getch >>= \ch -> case Curses.decodeKey ch of
-    Curses.KeyChar 'q' -> return $ finishGame s -- quit the game
-    _k -> do
-      let changeDirection = inputDirection _k
-      return $ eatCandy newCandy $ handleCollision scene $ moveSnake $ changeDirection s
+hoistState :: Monad m => State s a -> StateT s m a
+hoistState = StateT . (return .) . runState
 
-tick :: State -> Curses.Window -> IO ()
-tick s w = do
-  _ <- Curses.flushinp -- flush input
-  (sh,sw) <- Curses.scrSize
+getKeyEvent :: Scene -> StateT Game IO ()
+getKeyEvent scene = do
+  newCandy <- liftIO $ generateCandy scene
+  char <- liftIO Curses.getch
+  hoistState $ case Curses.decodeKey char of
+    Curses.KeyChar 'q' -> finishGame -- quit the game
+    k -> inputDirection k >> moveSnake >> handleCollision scene >> eatCandy newCandy
+
+tick :: Curses.Window -> StateT Game IO ()
+tick w = do
+  st <- get
+  _ <- liftIO Curses.flushinp -- flush input
+  (sh,sw) <- liftIO Curses.scrSize
   let scene = (sh-2,sw-1)
-  drawScene s w scene
-  threadDelay 80000
-  newState <- getKeyEvent s scene
-  unless (finished newState) $ tick newState w
+  liftIO $ drawScene st w scene
+  liftIO $ threadDelay 80000
+  newState <- execStateT (lift (getKeyEvent scene)) st
+  unless (newState ^. finished) $ tick w
 
 initCurses :: IO (Curses.Window, Scene)
 initCurses = do
@@ -101,5 +108,5 @@ main :: IO ()
 main = do
   (window, scene) <- initCurses
   initialCandy <- generateCandy scene
-  tick (initialState initialCandy scene) window
+  evalStateT (tick window) (initialState initialCandy scene)
   killCurses

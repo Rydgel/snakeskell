@@ -1,32 +1,41 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Types where
 
-import Data.Semigroup
+import Control.Lens
+import Data.Monoid ()
+import Control.Monad.State.Strict ()
 
 
-data Point2D = Point2D { px :: Int
-                       , py :: Int
+data Point2D = Point2D { _px :: Int
+                       , _py :: Int
                        } deriving (Show, Eq)
 
-instance Semigroup Point2D where
-  (Point2D a a') <> (Point2D b b') = Point2D (a+b) (a'+b')
+makeLenses ''Point2D
+
+instance Monoid Point2D where
+  mempty = Point2D 0 0
+  (Point2D a a') `mappend` (Point2D b b') = Point2D (a+b) (a'+b')
 
 data Direction = UpD | DownD | LeftD | RightD
   deriving (Show)
 
-instance Semigroup Direction where
-  DownD  <> UpD    = DownD
-  _      <> UpD    = UpD
-  UpD    <> DownD  = UpD
-  _      <> DownD  = DownD
-  RightD <> LeftD  = RightD
-  _      <> LeftD  = LeftD
-  LeftD  <> RightD = LeftD
-  _      <> RightD = RightD
+instance Monoid Direction where
+  mempty                  = RightD
+  DownD  `mappend` UpD    = DownD
+  _      `mappend` UpD    = UpD
+  UpD    `mappend` DownD  = UpD
+  _      `mappend` DownD  = DownD
+  RightD `mappend` LeftD  = RightD
+  _      `mappend` LeftD  = LeftD
+  LeftD  `mappend` RightD = LeftD
+  _      `mappend` RightD = RightD
 
-data State = State { snake     :: [Point2D]
-                   , candy     :: Point2D
-                   , direction :: Direction
-                   , finished  :: Bool
-                   } deriving (Show)
+data Game = Game { _snake     :: [Point2D]
+                 , _candy     :: Point2D
+                 , _direction :: Direction
+                 , _finished  :: Bool
+                 } deriving (Show)
+
+makeLenses ''Game
 
 type Scene = (Int,Int)

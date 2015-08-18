@@ -44,12 +44,11 @@ generateCandy (sh, sw) = do
   return (Point2D randX randY)
 
 inputDirection :: Curses.Key -> State Game ()
-inputDirection k = case k of
-  Curses.KeyUp    -> direction <>= UpD
-  Curses.KeyDown  -> direction <>= DownD
-  Curses.KeyLeft  -> direction <>= LeftD
-  Curses.KeyRight -> direction <>= RightD
-  _               -> modify' id
+inputDirection Curses.KeyUp    = direction <>= UpD
+inputDirection Curses.KeyDown  = direction <>= DownD
+inputDirection Curses.KeyLeft  = direction <>= LeftD
+inputDirection Curses.KeyRight = direction <>= RightD
+inputDirection _               = modify' id
 
 drawBorders :: Curses.Window -> Scene -> IO ()
 drawBorders window (sh,sw) =

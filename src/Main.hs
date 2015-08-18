@@ -41,7 +41,7 @@ generateCandy :: Scene -> IO Point2D
 generateCandy (sh, sw) = do
   randX <- randomRIO (1, sw-1)
   randY <- randomRIO (1, sh-1)
-  return (Point2D randX randY)
+  return $ Point2D randX randY
 
 inputDirection :: Curses.Key -> State Game ()
 inputDirection Curses.KeyUp    = direction <>= UpD

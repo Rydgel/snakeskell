@@ -48,7 +48,7 @@ inputDirection Curses.KeyUp    = direction <>= UpD
 inputDirection Curses.KeyDown  = direction <>= DownD
 inputDirection Curses.KeyLeft  = direction <>= LeftD
 inputDirection Curses.KeyRight = direction <>= RightD
-inputDirection _               = modify' id
+inputDirection _               = return ()
 
 drawBorders :: Curses.Window -> Scene -> IO ()
 drawBorders window (sh,sw) =

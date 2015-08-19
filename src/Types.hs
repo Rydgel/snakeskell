@@ -2,7 +2,7 @@
 module Types where
 
 import Control.Lens
-import Data.Monoid ()
+import Data.Monoid
 import Control.Monad.State.Strict ()
 
 

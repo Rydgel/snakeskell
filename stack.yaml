@@ -3,4 +3,4 @@ packages:
 - '.'
 extra-deps:
 - hscurses-1.4.2.0
-resolver: lts-2.18
+resolver: lts-3.13

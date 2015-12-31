@@ -2,7 +2,7 @@
 module Types where
 
 import Control.Lens
-import Data.Monoid
+import Data.Monoid ()
 import Control.Monad.State.Strict ()
 
 
@@ -34,6 +34,7 @@ data Game = Game { _snake     :: [Point2D]
                  , _candy     :: Point2D
                  , _direction :: Direction
                  , _finished  :: Bool
+                 , _pause     :: Bool
                  } deriving (Show)
 
 makeLenses ''Game

@@ -10,17 +10,25 @@ import           Control.Monad.State.Strict
 
 
 initialState :: Point2D -> Scene -> Game
-initialState c (sh,sw) = Game (replicate 5 $ Point2D (sw `div` 2) (sh `div` 2)) c RightD False
+initialState c (sh,sw) = Game (replicate 5 $ Point2D (sw `div` 2) (sh `div` 2)) c RightD False False
 
 finishGame :: State Game ()
 finishGame = finished .= True
 
+togglePauseGame :: State Game ()
+togglePauseGame = do
+  isPaused <- use pause
+  pause .= not isPaused
+
 moveSnake :: State Game ()
-moveSnake = modify' (\st -> st & snake .~ case st ^. direction of
-  UpD    -> (st ^. snake ^. _head) <> Point2D 0 (-1) : st ^. snake ^. _init
-  DownD  -> (st ^. snake ^. _head) <> Point2D 0 1 : st ^. snake ^. _init
-  LeftD  -> (st ^. snake ^. _head) <> Point2D (-1) 0 : st ^. snake ^. _init
-  RightD -> (st ^. snake ^. _head) <> Point2D 1 0 : st ^. snake ^. _init)
+moveSnake = do
+  isPaused <- use pause
+  unless isPaused $
+    modify' (\st -> st & snake .~ case st ^. direction of
+      UpD    -> (st ^. snake ^. _head) <> Point2D 0 (-1) : st ^. snake ^. _init
+      DownD  -> (st ^. snake ^. _head) <> Point2D 0 1 : st ^. snake ^. _init
+      LeftD  -> (st ^. snake ^. _head) <> Point2D (-1) 0 : st ^. snake ^. _init
+      RightD -> (st ^. snake ^. _head) <> Point2D 1 0 : st ^. snake ^. _init)
 
 handleCollision :: Scene -> State Game ()
 handleCollision (sh,sw) = do
@@ -34,7 +42,7 @@ eatCandy :: Point2D -> State Game ()
 eatCandy newCandy = modify' (\st -> do
   let sn = st ^. snake
   if head sn == st ^. candy -- eating a candy
-  then Game (sn ++ replicate 2 (last sn)) newCandy (st ^. direction) (st ^. finished)
+  then Game (sn ++ replicate 2 (last sn)) newCandy (st ^. direction) (st ^. finished) (st ^. pause)
   else st)
 
 generateCandy :: Scene -> IO Point2D
@@ -57,7 +65,7 @@ drawBorders window (sh,sw) =
     borderPoints = [(x, y) | x <- [0..sw], y <- [0..sh], cond x y]
 
 drawScene :: Game -> Curses.Window -> Scene -> IO ()
-drawScene (Game sn c _ _) window scene = do
+drawScene (Game sn c _ _ _) window scene = do
   Curses.wclear window
   drawBorders window scene -- draw borders
   Curses.mvWAddStr window (c ^. py) (c ^. px) "@" -- draw candy
@@ -73,6 +81,7 @@ getKeyEvent scene = do
   char <- liftIO Curses.getch
   hoistState $ case Curses.decodeKey char of
     Curses.KeyChar 'q' -> finishGame -- quit the game
+    Curses.KeyChar 'p' -> togglePauseGame -- pause the game
     k -> inputDirection k >> moveSnake >> handleCollision scene >> eatCandy newCandy
 
 tick :: Curses.Window -> StateT Game IO ()

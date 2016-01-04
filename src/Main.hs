@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Main where
 
 import           Control.Lens
@@ -10,40 +12,42 @@ import           Control.Monad.State.Strict
 
 
 initialState :: Point2D -> Scene -> Game
-initialState c (sh,sw) = Game (replicate 5 $ Point2D (sw `div` 2) (sh `div` 2)) c RightD False False
+initialState c (sh,sw) =
+  Game (replicate 5 $ Point2D (sw `div` 2) (sh `div` 2)) c RightD False False
 
 finishGame :: State Game ()
 finishGame = finished .= True
 
 togglePauseGame :: State Game ()
-togglePauseGame = do
-  isPaused <- use pause
-  pause .= not isPaused
+togglePauseGame = pause %= not
 
 moveSnake :: State Game ()
 moveSnake = do
   isPaused <- use pause
-  unless isPaused $
-    modify' (\st -> st & snake .~ case st ^. direction of
-      UpD    -> (st ^. snake ^. _head) <> Point2D 0 (-1) : st ^. snake ^. _init
-      DownD  -> (st ^. snake ^. _head) <> Point2D 0 1 : st ^. snake ^. _init
-      LeftD  -> (st ^. snake ^. _head) <> Point2D (-1) 0 : st ^. snake ^. _init
-      RightD -> (st ^. snake ^. _head) <> Point2D 1 0 : st ^. snake ^. _init)
+  dir <- use direction
+  unless isPaused $ snake %= moveSnakeWithDirection dir
+
+moveSnakeWithDirection :: Direction -> [Point2D] -> [Point2D]
+moveSnakeWithDirection UpD    s = head s <> Point2D 0 (-1) : init s
+moveSnakeWithDirection DownD  s = head s <> Point2D 0 1 : init s
+moveSnakeWithDirection LeftD  s = head s <> Point2D (-1) 0 : init s
+moveSnakeWithDirection RightD s = head s <> Point2D 1 0 : init s
 
 handleCollision :: Scene -> State Game ()
 handleCollision (sh,sw) = do
-  st <- get
-  let xs = st ^. snake
-  let posX = xs ^. _head ^. px
-  let posY = xs ^. _head ^. py
-  when (posX <= 0 || posX >= sw || posY <= 0 || posY >= sh || head xs `elem` tail xs) finishGame
+  xs <- use snake
+  let posX = head xs ^. px
+  let posY = head xs ^. py
+  when (posX <= 0 || posX >= sw || posY <= 0 || posY >= sh || head xs `elem` tail xs)
+    finishGame
 
 eatCandy :: Point2D -> State Game ()
-eatCandy newCandy = modify' (\st -> do
-  let sn = st ^. snake
-  if head sn == st ^. candy -- eating a candy
-  then Game (sn ++ replicate 2 (last sn)) newCandy (st ^. direction) (st ^. finished) (st ^. pause)
-  else st)
+eatCandy newCandy = do
+  sn <- use snake
+  c  <- use candy
+  when (head sn == c) $ do
+    candy .= newCandy
+    snake .= (sn ++ replicate 2 (last sn))
 
 generateCandy :: Scene -> IO Point2D
 generateCandy (sh, sw) = do
@@ -64,14 +68,6 @@ drawBorders window (sh,sw) =
     cond x y = x == 0 || x == sw || y == 0 || y == sh
     borderPoints = [(x, y) | x <- [0..sw], y <- [0..sh], cond x y]
 
-drawScene :: Game -> Curses.Window -> Scene -> IO ()
-drawScene (Game sn c _ _ _) window scene = do
-  Curses.wclear window
-  drawBorders window scene -- draw borders
-  Curses.mvWAddStr window (c ^. py) (c ^. px) "@" -- draw candy
-  mapM_ (\s -> Curses.mvWAddStr window (s ^. py) (s ^. px) "#") sn -- draw snake
-  Curses.wRefresh window
-
 hoistState :: Monad m => State s a -> StateT s m a
 hoistState = StateT . (return .) . runState
 
@@ -82,7 +78,11 @@ getKeyEvent scene = do
   hoistState $ case Curses.decodeKey char of
     Curses.KeyChar 'q' -> finishGame -- quit the game
     Curses.KeyChar 'p' -> togglePauseGame -- pause the game
-    k -> inputDirection k >> moveSnake >> handleCollision scene >> eatCandy newCandy
+    k                  -> do
+                            inputDirection k
+                            moveSnake
+                            handleCollision scene
+                            eatCandy newCandy
 
 tick :: Curses.Window -> StateT Game IO ()
 tick w = do
@@ -94,6 +94,14 @@ tick w = do
   liftIO $ threadDelay 80000
   newState <- execStateT (lift (getKeyEvent scene)) st
   unless (newState ^. finished) $ tick w
+
+drawScene :: Game -> Curses.Window -> Scene -> IO ()
+drawScene Game{..} window scene = do
+  Curses.wclear window
+  drawBorders window scene -- draw borders
+  Curses.mvWAddStr window (_candy ^. py) (_candy ^. px) "@" -- draw candy
+  mapM_ (\s -> Curses.mvWAddStr window (s ^. py) (s ^. px) "#") _snake -- draw snake
+  Curses.wRefresh window
 
 initCurses :: IO (Curses.Window, Scene)
 initCurses = do
